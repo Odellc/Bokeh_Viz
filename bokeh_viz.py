@@ -425,3 +425,145 @@ sup_title = Div(text=html)
 
 # Visualize
 show(column(sup_title, grid))
+
+
+#########Linking two LASSO and filtering to multiple graphs
+
+# Isolate relevant data
+phi_gm_stats_2 = (team_stats[(team_stats['teamAbbr'] == 'PHI') & 
+                             (team_stats['seasTyp'] == 'Regular')]
+                  .loc[:, ['gmDate', 
+                           'team2P%', 
+                           'team3P%', 
+                           'teamPTS', 
+                           'opptPTS']]
+                  .sort_values('gmDate'))
+
+# Add game number
+phi_gm_stats_2['game_num'] = range(1, len(phi_gm_stats_2) + 1)
+
+# Derive a win_loss column
+win_loss = []
+for _, row in phi_gm_stats_2.iterrows():
+
+    # If the 76ers score more points, it's a win
+    if row['teamPTS'] > row['opptPTS']:
+        win_loss.append('W')
+    else:
+        win_loss.append('L')
+
+# Add the win_loss data to the DataFrame
+phi_gm_stats_2['winLoss'] = win_loss
+
+phi_gm_stats_2.head()
+
+output_file('phi-gm-linked-selections.html',
+            title='76ers Percentages vs. Win-Loss')
+
+# Store the data in a ColumnDataSource
+gm_stats_cds = ColumnDataSource(phi_gm_stats_2)
+
+# Create a CategoricalColorMapper that assigns specific colors to wins and losses
+win_loss_mapper = CategoricalColorMapper(factors = ['W', 'L'], palette=['Green', 'Red'])
+
+# Specify the tools
+toolList = ['lasso_select', 'tap', 'reset', 'save']
+
+# Create a figure relating the percentages
+pctFig = figure(title='2PT FG % vs 3PT FG %, 2017-18 Regular Season',
+                plot_height=400, plot_width=400, tools=toolList,
+                x_axis_label='2PT FG%', y_axis_label='3PT FG%')
+
+# Draw with circle markers
+pctFig.circle(x='team2P%', y='team3P%', source=gm_stats_cds, 
+              size=12, color='black')
+
+# Format the y-axis tick labels as percenages
+pctFig.xaxis[0].formatter = NumeralTickFormatter(format='00.0%')
+pctFig.yaxis[0].formatter = NumeralTickFormatter(format='00.0%')
+
+# Create a figure relating the totals
+totFig = figure(title='Team Points vs Opponent Points, 2017-18 Regular Season',
+                plot_height=400, plot_width=400, tools=toolList,
+                x_axis_label='Team Points', y_axis_label='Opponent Points')
+
+# Draw with square markers
+totFig.square(x='teamPTS', y='opptPTS', source=gm_stats_cds, size=10,
+              color=dict(field='winLoss', transform=win_loss_mapper))
+
+# Create layout
+grid = gridplot([[pctFig, totFig]])
+
+# Visualize
+show(grid)
+
+
+
+##### Highlight data using the legend
+
+
+output_file('lebron-vs-durant.html',
+            title='LeBron James vs. Kevin Durant')
+
+# Store the data in a ColumnDataSource
+player_gm_stats = ColumnDataSource(player_stats)
+
+# Create a view for each player
+lebron_filters = [GroupFilter(column_name='playFNm', group='LeBron'),
+                  GroupFilter(column_name='playLNm', group='James')]
+lebron_view = CDSView(source=player_gm_stats,
+                      filters=lebron_filters)
+
+durant_filters = [GroupFilter(column_name='playFNm', group='Kevin'),
+                  GroupFilter(column_name='playLNm', group='Durant')]
+durant_view = CDSView(source=player_gm_stats,
+                      filters=durant_filters)
+
+
+# Consolidate the common keyword arguments in dicts
+common_figure_kwargs = {
+    'plot_width': 400,
+    'x_axis_label': 'Points',
+    'toolbar_location': None,
+}
+common_circle_kwargs = {
+    'x': 'playPTS',
+    'y': 'playTRB',
+    'source': player_gm_stats,
+    'size': 12,
+    'alpha': 0.7,
+}
+common_lebron_kwargs = {
+    'view': lebron_view,
+    'color': '#002859',
+    'legend_label': 'LeBron James'
+}
+common_durant_kwargs = {
+    'view': durant_view,
+    'color': '#FFC324',
+    'legend_label': 'Kevin Durant'
+}
+
+
+# Create the two figures and draw the data
+hide_fig = figure(**common_figure_kwargs,
+                  title='Click Legend to HIDE Data', 
+                  y_axis_label='Rebounds')
+hide_fig.circle(**common_circle_kwargs, **common_lebron_kwargs)
+hide_fig.circle(**common_circle_kwargs, **common_durant_kwargs)
+
+mute_fig = figure(**common_figure_kwargs, title='Click Legend to MUTE Data')
+mute_fig.circle(**common_circle_kwargs, **common_lebron_kwargs,
+                muted_alpha=0.1)
+mute_fig.circle(**common_circle_kwargs, **common_durant_kwargs,
+                muted_alpha=0.1)
+
+
+# Add interactivity to the legend
+hide_fig.legend.click_policy = 'hide'
+mute_fig.legend.click_policy = 'mute'
+
+# Visualize
+grid = gridplot([[hide_fig, mute_fig]])
+
+show(grid)
